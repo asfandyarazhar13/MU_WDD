@@ -18,4 +18,10 @@ When the files are unzipped directories will have the following naming conventio
 
 
 ### Some notes: 
-1. The for the sake of simplicity, the distilled images are extracted using some of the best hyperparameters detailed in the paper [_Dataset Distillation by Matching Training Trajectories_](https://arxiv.org/abs/2203.11932). See table below.
+1. For the sake of simplicity, the distilled images are extracted using some of the best hyperparameters detailed in the papers: 
+* _[Dataset Distillation by Matching Training Trajectories](https://arxiv.org/abs/2203.11932)_
+* _[Scaling Up Dataset Distillation to ImageNet-1K with Constant Memory](https://arxiv.org/abs/2211.10586)_
+
+See full table below. 
+
+2. 
