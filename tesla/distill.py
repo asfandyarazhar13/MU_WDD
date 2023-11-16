@@ -123,6 +123,9 @@ def main(args):
 
     syn_lr = torch.tensor(args.lr_teacher).to(args.device)
 
+    # CUSTOM: initialize weights
+    syn_weights = torch.ones(image_syn.shape[0]).to(args.device)
+
     if args.pix_init == 'real':
         print('initialize synthetic data from random real images')
         for c in range(num_classes):
@@ -136,14 +139,26 @@ def main(args):
     print(image_syn.shape)
     syn_lr = syn_lr.detach().to(args.device).requires_grad_(True)
 
-    # TODO: add weights to optimizer state space
 
     optimizer_img = torch.optim.SGD([image_syn], lr=args.lr_img, momentum=0.5)
     optimizer_lr = torch.optim.SGD([syn_lr], lr=args.lr_lr, momentum=0.5)
     optimizer_img.zero_grad()
     optimizer_lr.zero_grad()
 
-    criterion = nn.CrossEntropyLoss().to(args.device)
+    # CUSTOM: add weights to optimizer state space
+    optimizer_weights = torch.optim.SGD([syn_weights], lr=args.lr_weights, momentum=0.5)
+    optimizer_weights.zero_grad()
+
+    # CUSTOM: replace CE loss with a custom function that accepts an optional weight for each example
+    # criterion = nn.CrossEntropyLoss().to(args.device)
+    def criterion(input, target, weights=None):
+        ce_loss = F.cross_entropy_loss(input, target, reduction="none")
+
+        if weights is not None:
+            ce_loss *= weights
+
+        return ce_loss
+
     print('%s training begins'%get_time())
 
     expert_dir = os.path.join(args.buffer_path, args.dataset)
@@ -393,7 +408,7 @@ def main(args):
 
             forward_params = student_params[-1]
             x = student_net(x, flat_param=forward_params)
-            ce_loss = criterion(x, this_y)
+            ce_loss = criterion(x, this_y, weights=syn_weights)      # CUSTOM: here, pass in syn image weights to scale loss contributions
 
             grad = torch.autograd.grad(ce_loss, forward_params, create_graph=True, retain_graph=True)[0]
 
@@ -430,8 +445,13 @@ def main(args):
         lr_grad = torch.autograd.grad(grand_loss, syn_lr)[0]
         syn_lr.grad = lr_grad
 
+        # CUSTOM: compute gradient of MTT loss wrt weights
+        weights_grad = torch.autograd.grad(grand_loss, syn_weights)[0]
+        syn_weights.grad = weights_grad
+
         optimizer_img.step()
         optimizer_lr.step()
+        optimizer_weights.step()        # CUSTOM
 
 
         wandb.log({"Grand_Loss": grand_loss.detach().cpu(),
@@ -441,6 +461,7 @@ def main(args):
             del _
         if it%10 == 0:
             print('%s iter = %04d, loss = %.4f' % (get_time(), it, grand_loss.item()))
+            print("syn_weights:", syn_weights.item())
 
     wandb.finish()
 
@@ -462,7 +483,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval_it', type=int, default=100, help='how often to evaluate')
 
     parser.add_argument('--epoch_eval_train', type=int, default=1000, help='epochs to train a model with synthetic data')
-    parser.add_argument('--Iteration', type=int, default=10000, help='how many distillation steps to perform')
+    parser.add_argument('--Iteration', type=int, default=10_000, help='how many distillation steps to perform')
 
     parser.add_argument('--lr_img', type=float, default=1000, help='learning rate for updating synthetic images')
     parser.add_argument('--lr_lr', type=float, default=1e-05, help='learning rate for updating... learning rate')
