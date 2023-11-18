@@ -270,15 +270,33 @@ def main(args):
                     wandb.log({"Synthetic_Images": wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
                     wandb.log({'Synthetic_Pixels': wandb.Histogram(torch.nan_to_num(image_save.detach().cpu()))}, step=it)
 
+                    # for clip_val in [2.5]:
+                    #     std = torch.std(image_save)
+                    #     mean = torch.mean(image_save)
+                    #     upsampled = torch.clip(image_save, min=mean-clip_val*std, max=mean+clip_val*std)
+                    #     if args.dataset != "ImageNet":
+                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
+                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
+                    #     grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
+                    #     wandb.log({"Clipped_Synthetic_Images/std_{}".format(clip_val): wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
+
                     for clip_val in [2.5]:
                         std = torch.std(image_save)
                         mean = torch.mean(image_save)
-                        upsampled = torch.clip(image_save, min=mean-clip_val*std, max=mean+clip_val*std)
+                    
+                        # Set clip boundaries to be within standard image value ranges (0-255)
+                        min_clip = max(mean - clip_val * std, 0)  # Ensures min is not < 0
+                        max_clip = min(mean + clip_val * std, 255)  # Ensures max is not > 255
+                    
+                        upsampled = torch.clip(image_save, min=min_clip, max=max_clip)
+                    
                         if args.dataset != "ImageNet":
                             upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
                             upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
+                    
                         grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
                         wandb.log({"Clipped_Synthetic_Images/std_{}".format(clip_val): wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
+
 
                     if args.zca:
                         image_save = image_save.to(args.device)
