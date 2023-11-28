@@ -1,14 +1,3 @@
-
-def unnormalize_imagenet(image):
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
-    return image * std + mean
-
-def renormalize_imagenet(image):
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
-    return (image - mean) / std
-
 import os
 import argparse
 import numpy as np
@@ -31,6 +20,16 @@ PngImagePlugin.MAX_TEXT_CHUNK = LARGE_ENOUGH_NUMBER * (1024**2)
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+def unnormalize_imagenet(image):
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
+    return image * std + mean
+
+def renormalize_imagenet(image):
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
+    return (image - mean) / std
 
 def main(args):
 
@@ -128,58 +127,32 @@ def main(args):
     label_syn = torch.tensor([np.ones(args.ipc)*i for i in range(num_classes)], dtype=torch.long, requires_grad=False, device=args.device).view(-1) # [0,0,0, 1,1,1, ..., 9,9,9]
 
     if args.texture:
-        
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0]*args.canvas_size, im_size[1]*args.canvas_size), dtype=torch.float)
+        image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0]*args.canvas_size, im_size[1]*args.canvas_size), dtype=torch.float)
+        image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
     else:
-        
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0], im_size[1]), dtype=torch.float)
+        image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0], im_size[1]), dtype=torch.float)
+        image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
 
     syn_lr = torch.tensor(args.lr_teacher).to(args.device)
 
     if args.pix_init == 'real':
         print('initialize synthetic data from random real images')
         for c in range(num_classes):
-            
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn.data[c * args.ipc:(c + 1) * args.ipc] = get_images(c, args.ipc).detach().data
+            image_syn.data[c * args.ipc:(c + 1) * args.ipc] = get_images(c, args.ipc).detach().data
+            image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
     else:
         print('initialize synthetic data from random noise')
 
 
     ''' training '''
-    
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn = 
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn.detach().to(args.device).requires_grad_(True)
+    image_syn = image_syn.detach().to(args.device).requires_grad_(True)
+    image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
     print(image_syn.shape)
     syn_lr = syn_lr.detach().to(args.device).requires_grad_(True)
 
     # TODO: add weights to optimizer state space
 
-    optimizer_img = torch.optim.SGD([
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn], lr=args.lr_img, momentum=0.5)
+    optimizer_img = torch.optim.SGD([image_syn], lr=args.lr_img, momentum=0.5)
     optimizer_lr = torch.optim.SGD([syn_lr], lr=args.lr_lr, momentum=0.5)
     optimizer_img.zero_grad()
     optimizer_lr.zero_grad()
@@ -247,21 +220,12 @@ image_syn], lr=args.lr_img, momentum=0.5)
 
                     eval_labs = label_syn
                     with torch.no_grad():
-                        image_save = 
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn
+                        image_save = image_syn
+                        image_save = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_save), 0, 1))
                     image_syn_eval, label_syn_eval = copy.deepcopy(image_save.detach()), copy.deepcopy(eval_labs.detach()) # avoid any unaware modification
 
                     args.lr_net = syn_lr.item()
-                    _, acc_train, acc_test = evaluate_synset(it_eval, net_eval, 
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn_eval, label_syn_eval, testloader, args, texture=args.texture)
+                    _, acc_train, acc_test = evaluate_synset(it_eval, net_eval, image_syn_eval, label_syn_eval, testloader, args, texture=args.texture)
                     accs_test.append(acc_test)
                     accs_train.append(acc_train)
                 accs_test = np.array(accs_test)
@@ -281,12 +245,8 @@ image_syn_eval, label_syn_eval, testloader, args, texture=args.texture)
 
         if it in eval_it_pool and (save_this_it or it % 1000 == 0) and args.eval_it > 0:
             with torch.no_grad():
-                image_save = 
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn.cuda()
+                image_save = image_syn.cuda()
+                image_save = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_save), 0, 1))
 
                 save_dir = os.path.join(".", "logged_files", args.dataset, 'offline' if wandb.run.name is None else wandb.run.name)
 
@@ -300,48 +260,17 @@ image_syn.cuda()
                     torch.save(image_save.cpu(), os.path.join(save_dir, "images_best.pt".format(it)))
                     torch.save(label_syn.cpu(), os.path.join(save_dir, "labels_best.pt".format(it)))
 
-                wandb.log({"Pixels": wandb.Histogram(torch.nan_to_num(
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn.detach().cpu()))}, step=it)
+                wandb.log({"Pixels": wandb.Histogram(torch.nan_to_num(image_syn.detach().cpu()))}, step=it)
 
                 if args.ipc < 50 or args.force_save:
                     upsampled = image_save
+                    upsampled = renormalize_imagenet(torch.clamp(unnormalize_imagenet(upsampled), 0, 1))
                     if args.dataset != "ImageNet":
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
                     grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
                     wandb.log({"Synthetic_Images": wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
                     wandb.log({'Synthetic_Pixels': wandb.Histogram(torch.nan_to_num(image_save.detach().cpu()))}, step=it)
-
-                    # for clip_val in [2.5]:
-                    #     std = torch.std(image_save)
-                    #     mean = torch.mean(image_save)
-                    #     upsampled = torch.clip(image_save, min=mean-clip_val*std, max=mean+clip_val*std)
-                    #     if args.dataset != "ImageNet":
-                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
-                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
-                    #     grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
-                    #     wandb.log({"Clipped_Synthetic_Images/std_{}".format(clip_val): wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
-
-                    # for clip_val in [2.5]:
-                    #     std = torch.std(image_save)
-                    #     mean = torch.mean(image_save)
-                    
-                    #     # Set clip boundaries to be within standard image value ranges (0-255)
-                    #     min_clip = max(mean - clip_val * std, 0)  # Ensures min is not < 0
-                    #     max_clip = min(mean + clip_val * std, 255)  # Ensures max is not > 255
-                    
-                    #     upsampled = torch.clip(image_save, min=min_clip, max=max_clip)
-                    
-                    #     if args.dataset != "ImageNet":
-                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
-                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
-                    
-                    #     grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
-                    #     wandb.log({"Clipped_Synthetic_Images/std_{}".format(clip_val): wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
 
                     if args.zca:
                         image_save = image_save.to(args.device)
@@ -351,23 +280,13 @@ image_syn.detach().cpu()))}, step=it)
                         torch.save(image_save.cpu(), os.path.join(save_dir, "images_zca_{}.pt".format(it)))
 
                         upsampled = image_save
+                        upsampled = renormalize_imagenet(torch.clamp(unnormalize_imagenet(upsampled), 0, 1))
                         if args.dataset != "ImageNet":
                             upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
                             upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
                         grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
                         wandb.log({"Reconstructed_Images": wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
                         wandb.log({'Reconstructed_Pixels': wandb.Histogram(torch.nan_to_num(image_save.detach().cpu()))}, step=it)
-
-                        for clip_val in [2.5]:
-                            std = torch.std(image_save)
-                            mean = torch.mean(image_save)
-                            upsampled = torch.clip(image_save, min=mean - clip_val * std, max=mean + clip_val * std)
-                            if args.dataset != "ImageNet":
-                                upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
-                                upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
-                            grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
-                            wandb.log({"Clipped_Reconstructed_Images/std_{}".format(clip_val): wandb.Image(
-                                torch.nan_to_num(grid.detach().cpu()))}, step=it)
 
         wandb.log({"Synthetic_LR": syn_lr.detach().cpu()}, step=it)
 
@@ -430,43 +349,19 @@ image_syn.detach().cpu()))}, step=it)
 
             batch_labels = []
             SOFT_INIT_BATCH_SIZE = 50
-            if 
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn.shape[0] > SOFT_INIT_BATCH_SIZE and args.dataset == 'ImageNet':
-                for indices in torch.split(torch.tensor([i for i in range(0, 
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn.shape[0])], dtype=torch.long), SOFT_INIT_BATCH_SIZE):
-                    batch_labels.append(label_net(
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn[indices].detach().to(args.device), flat_param=label_params))
+            if image_syn.shape[0] > SOFT_INIT_BATCH_SIZE and args.dataset == 'ImageNet':
+                for indices in torch.split(torch.tensor([i for i in range(0, image_syn.shape[0])], dtype=torch.long), SOFT_INIT_BATCH_SIZE):
+                    batch_labels.append(label_net(image_syn[indices].detach().to(args.device), flat_param=label_params))
             else:
-                label_syn = label_net(
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn.detach().to(args.device), flat_param=label_params)
+                label_syn = label_net(image_syn.detach().to(args.device), flat_param=label_params)
             label_syn = torch.cat(batch_labels, dim=0)
             label_syn = torch.nn.functional.softmax(label_syn)
             del label_net, label_params
             for _ in batch_labels:
                 del _
 
-        syn_images = 
-# Unnormalize, clip, and renormalize
-image_syn = unnormalize_imagenet(image_syn)
-image_syn = torch.clamp(image_syn, 0, 1)
-image_syn = renormalize_imagenet(image_syn)
-image_syn
+        syn_images = image_syn
+        syn_images = renormalize_imagenet(torch.clamp(unnormalize_imagenet(syn_images), 0, 1))
 
         y_hat = label_syn.to(args.device)
 
