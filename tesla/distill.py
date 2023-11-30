@@ -14,6 +14,8 @@ from reparam_module import ReparamModule
 from torch.utils.data import Subset
 from torch.utils.data import DataLoader
 
+from actual_utils import save_grid_with_captions
+
 from PIL import PngImagePlugin
 LARGE_ENOUGH_NUMBER = 100
 PngImagePlugin.MAX_TEXT_CHUNK = LARGE_ENOUGH_NUMBER * (1024**2)
@@ -123,6 +125,9 @@ def main(args):
 
     syn_lr = torch.tensor(args.lr_teacher).to(args.device)
 
+    # CUSTOM: initialize weights
+    syn_weights = torch.ones(image_syn.shape[0]).to(args.device)
+
     if args.pix_init == 'real':
         print('initialize synthetic data from random real images')
         for c in range(num_classes):
@@ -136,14 +141,31 @@ def main(args):
     print(image_syn.shape)
     syn_lr = syn_lr.detach().to(args.device).requires_grad_(True)
 
-    # TODO: add weights to optimizer state space
+    # CUSTOM
+    syn_weights = syn_weights.detach().to(args.device).requires_grad_(True)
+
 
     optimizer_img = torch.optim.SGD([image_syn], lr=args.lr_img, momentum=0.5)
     optimizer_lr = torch.optim.SGD([syn_lr], lr=args.lr_lr, momentum=0.5)
     optimizer_img.zero_grad()
     optimizer_lr.zero_grad()
 
-    criterion = nn.CrossEntropyLoss().to(args.device)
+    # CUSTOM: add weights to optimizer state space
+    optimizer_weights = torch.optim.SGD([syn_weights], lr=args.lr_weights, momentum=0.5)
+    optimizer_weights.zero_grad()
+
+    # CUSTOM: replace CE loss with a custom function that accepts an optional weight for each example
+    # criterion = nn.CrossEntropyLoss().to(args.device)
+    def criterion(input, target, weights=None):
+        ce_loss = F.cross_entropy(input, target, reduction="none")
+
+        if weights is not None:
+            ce_loss *= weights
+        
+        ce_loss = torch.mean(ce_loss)
+
+        return ce_loss
+
     print('%s training begins'%get_time())
 
     expert_dir = os.path.join(args.buffer_path, args.dataset)
@@ -252,7 +274,7 @@ def main(args):
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
                     grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
-                    wandb.log({"Synthetic_Images": wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
+                    # wandb.log({"Synthetic_Images": wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
                     wandb.log({'Synthetic_Pixels': wandb.Histogram(torch.nan_to_num(image_save.detach().cpu()))}, step=it)
 
                     for clip_val in [2.5]:
@@ -368,6 +390,10 @@ def main(args):
         y_hat = label_syn.to(args.device)
 
         syn_image_gradients = torch.zeros(syn_images.shape).to(args.device)
+
+        # CUSTOM
+        syn_weights_gradients = torch.zeros(syn_weights.shape).to(args.device)
+
         x_list = []
         original_x_list = []
         y_list = []
@@ -393,7 +419,7 @@ def main(args):
 
             forward_params = student_params[-1]
             x = student_net(x, flat_param=forward_params)
-            ce_loss = criterion(x, this_y)
+            ce_loss = criterion(x, this_y, weights=syn_weights**2)      # CUSTOM: here, pass in syn image weights to scale loss contributions
 
             grad = torch.autograd.grad(ce_loss, forward_params, create_graph=True, retain_graph=True)[0]
 
@@ -410,19 +436,22 @@ def main(args):
             w_i = student_params[i]
             output_i = student_net(x_list[i], flat_param = w_i)
             if args.batch_syn:
-                ce_loss_i = criterion(output_i, y_list[i])
+                ce_loss_i = criterion(output_i, y_list[i], syn_weights**2)     # CUSTOM: include weights
             else:
-                ce_loss_i = criterion(output_i, y_hat)
+                ce_loss_i = criterion(output_i, y_hat, syn_weights**2)         # CUSTOM: include weights
 
             grad_i = torch.autograd.grad(ce_loss_i, w_i, create_graph=True, retain_graph=True)[0]
+            grad_i_weights = torch.autograd.grad(ce_loss_i, syn_weights, create_graph=True, retain_graph=True)[0]       # CUSTOM
             single_term = syn_lr.item() * (target_params - starting_params)
             square_term = (syn_lr.item() ** 2) * gradient_sum
             gradients = 2  * torch.autograd.grad( (single_term + square_term) @ grad_i / param_dist, original_x_list[i])
             with torch.no_grad():
                 syn_image_gradients[indices_chunks_copy[i]] += gradients[0]
+                syn_weights_gradients += grad_i_weights
         # ---------end of computing input image gradients and learning rates--------------
 
         syn_images.grad = syn_image_gradients
+
 
         grand_loss = starting_params - syn_lr * gradient_sum - target_params
         grand_loss = grand_loss.dot(grand_loss) / param_dist
@@ -430,8 +459,18 @@ def main(args):
         lr_grad = torch.autograd.grad(grand_loss, syn_lr)[0]
         syn_lr.grad = lr_grad
 
+        # CUSTOM: compute gradient of MTT loss wrt weights
+        syn_weights.grad = syn_weights_gradients
+        # weights_grad = torch.autograd.grad(grand_loss, syn_weights)[0]
+        # syn_weights.grad = weights_grad
+
         optimizer_img.step()
         optimizer_lr.step()
+        optimizer_weights.step()        # CUSTOM
+
+        # CUSTOM: renormalize weights
+        with torch.no_grad():
+            syn_weights *= syn_weights.shape[0] / torch.sum(syn_weights)
 
 
         wandb.log({"Grand_Loss": grand_loss.detach().cpu(),
@@ -441,6 +480,7 @@ def main(args):
             del _
         if it%10 == 0:
             print('%s iter = %04d, loss = %.4f' % (get_time(), it, grand_loss.item()))
+            print("syn_weights:", syn_weights)
 
     wandb.finish()
 
@@ -462,11 +502,14 @@ if __name__ == '__main__':
     parser.add_argument('--eval_it', type=int, default=100, help='how often to evaluate')
 
     parser.add_argument('--epoch_eval_train', type=int, default=1000, help='epochs to train a model with synthetic data')
-    parser.add_argument('--Iteration', type=int, default=10000, help='how many distillation steps to perform')
+    parser.add_argument('--Iteration', type=int, default=10_000, help='how many distillation steps to perform')
 
     parser.add_argument('--lr_img', type=float, default=1000, help='learning rate for updating synthetic images')
     parser.add_argument('--lr_lr', type=float, default=1e-05, help='learning rate for updating... learning rate')
     parser.add_argument('--lr_teacher', type=float, default=0.01, help='initialization for synthetic learning rate')
+
+    # CUSTOM
+    parser.add_argument('--lr_weights', type=float, default=1e-1, help='learning rate for updating synthetic weights')
 
     parser.add_argument('--lr_init', type=float, default=0.01, help='how to init lr (alpha)')
 
