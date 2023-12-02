@@ -23,6 +23,16 @@ PngImagePlugin.MAX_TEXT_CHUNK = LARGE_ENOUGH_NUMBER * (1024**2)
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+def unnormalize_imagenet(image):
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
+    return image * std + mean
+
+def renormalize_imagenet(image):
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
+    return (image - mean) / std
+
 def main(args):
 
     if args.zca and args.texture:
@@ -120,8 +130,10 @@ def main(args):
 
     if args.texture:
         image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0]*args.canvas_size, im_size[1]*args.canvas_size), dtype=torch.float)
+        image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
     else:
         image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0], im_size[1]), dtype=torch.float)
+        image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
 
     syn_lr = torch.tensor(args.lr_teacher).to(args.device)
 
@@ -132,12 +144,14 @@ def main(args):
         print('initialize synthetic data from random real images')
         for c in range(num_classes):
             image_syn.data[c * args.ipc:(c + 1) * args.ipc] = get_images(c, args.ipc).detach().data
+            image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
     else:
         print('initialize synthetic data from random noise')
 
 
     ''' training '''
     image_syn = image_syn.detach().to(args.device).requires_grad_(True)
+    image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
     print(image_syn.shape)
     syn_lr = syn_lr.detach().to(args.device).requires_grad_(True)
 
@@ -229,6 +243,7 @@ def main(args):
                     eval_labs = label_syn
                     with torch.no_grad():
                         image_save = image_syn
+                        image_save = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_save), 0, 1))
                     image_syn_eval, label_syn_eval = copy.deepcopy(image_save.detach()), copy.deepcopy(eval_labs.detach()) # avoid any unaware modification
 
                     args.lr_net = syn_lr.item()
@@ -253,6 +268,7 @@ def main(args):
         if it in eval_it_pool and (save_this_it or it % 1000 == 0) and args.eval_it > 0:
             with torch.no_grad():
                 image_save = image_syn.cuda()
+                image_save = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_save), 0, 1))
 
                 save_dir = os.path.join(".", "logged_files", args.dataset, 'offline' if wandb.run.name is None else wandb.run.name)
 
@@ -270,6 +286,7 @@ def main(args):
 
                 if args.ipc < 50 or args.force_save:
                     upsampled = image_save
+                    upsampled = renormalize_imagenet(torch.clamp(unnormalize_imagenet(upsampled), 0, 1))
                     if args.dataset != "ImageNet":
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
                         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
@@ -277,24 +294,26 @@ def main(args):
                     # wandb.log({"Synthetic_Images": wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
                     wandb.log({'Synthetic_Pixels': wandb.Histogram(torch.nan_to_num(image_save.detach().cpu()))}, step=it)
 
-                    for clip_val in [2.5]:
-                        std = torch.std(image_save)
-                        mean = torch.mean(image_save)
-                        upsampled = torch.clip(image_save, min=mean-clip_val*std, max=mean+clip_val*std)
-                        if args.dataset != "ImageNet":
-                            upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
-                            upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
-                        grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
-                        wandb.log({"Clipped_Synthetic_Images/std_{}".format(clip_val): wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
+                    # for clip_val in [2.5]:
+                    #     std = torch.std(image_save)
+                    #     mean = torch.mean(image_save)
+                    #     upsampled = torch.clip(image_save, min=mean-clip_val*std, max=mean+clip_val*std)
+                    #     if args.dataset != "ImageNet":
+                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
+                    #         upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
+                    #     grid = torchvision.utils.make_grid(upsampled, nrow=10, normalize=True, scale_each=True)
+                    #     wandb.log({"Clipped_Synthetic_Images/std_{}".format(clip_val): wandb.Image(torch.nan_to_num(grid.detach().cpu()))}, step=it)
 
                     if args.zca:
                         image_save = image_save.to(args.device)
                         image_save = args.zca_trans.inverse_transform(image_save)
+                        image_save = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_save), 0, 1))
                         image_save.cpu()
 
                         torch.save(image_save.cpu(), os.path.join(save_dir, "images_zca_{}.pt".format(it)))
 
                         upsampled = image_save
+                        upsampled = renormalize_imagenet(torch.clamp(unnormalize_imagenet(upsampled), 0, 1))
                         if args.dataset != "ImageNet":
                             upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=2)
                             upsampled = torch.repeat_interleave(upsampled, repeats=4, dim=3)
@@ -386,6 +405,7 @@ def main(args):
                 del _
 
         syn_images = image_syn
+        syn_images = renormalize_imagenet(torch.clamp(unnormalize_imagenet(syn_images), 0, 1))
 
         y_hat = label_syn.to(args.device)
 
@@ -555,5 +575,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     main(args)
-
-
