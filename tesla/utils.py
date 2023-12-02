@@ -35,7 +35,29 @@ def get_dataset(dataset, data_path, batch_size=1, args=None):
         class_names = dst_train.classes
         class_map = {x:x for x in range(num_classes)}
 
+    
+    elif dataset == 'SVHN':
+        channel = 3
+        im_size = (32, 32)
+        num_classes = 10
+        mean = [0.4377, 0.4438, 0.4728]  
+        std = [0.1201, 0.1231, 0.1052]  
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
 
+        # SVHN provides extra training data which can be included by checking some condition or argument
+        # extra_data = args.extra_data if args and hasattr(args, 'extra_data') else False
+
+        dst_train = datasets.SVHN(data_path, split='train', download=True, transform=transform)
+        dst_test = datasets.SVHN(data_path, split='test', download=True, transform=transform)
+
+        # if extra_data:
+        #     dst_extra = datasets.SVHN(data_path, split='extra', download=True, transform=transform)
+        #     dst_train = torch.utils.data.ConcatDataset([dst_train, dst_extra])
+
+        class_names = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+        class_map = {x: x for x in range(num_classes)}
+
+    
     elif dataset == 'Tiny':
         channel = 3
         im_size = (64, 64)
