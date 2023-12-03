@@ -289,7 +289,7 @@ def main(args):
 
                 wandb.log({"Pixels": wandb.Histogram(torch.nan_to_num(image_syn.detach().cpu()))}, step=it)
 
-                if args.ipc < 50 or args.force_save:
+                if args.ipc <= 50 or args.force_save:
                     upsampled = image_save
                     upsampled = renormalize_imagenet(torch.clamp(unnormalize_imagenet(upsampled), 0, 1))
                     if args.dataset != "ImageNet":
