@@ -24,16 +24,17 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def unnormalize_imagenet(image):
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1).to(args.device)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1).to(args.device)
     return image * std + mean
 
 def renormalize_imagenet(image):
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1)
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(-1, 1, 1).to(args.device)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(-1, 1, 1).to(args.device)
     return (image - mean) / std
 
 def main(args):
+    print('Running enhanced weighted distillation process...')
 
     if args.zca and args.texture:
         raise AssertionError("Cannot use zca and texture together")
@@ -129,11 +130,13 @@ def main(args):
     label_syn = torch.tensor([np.ones(args.ipc)*i for i in range(num_classes)], dtype=torch.long, requires_grad=False, device=args.device).view(-1) # [0,0,0, 1,1,1, ..., 9,9,9]
 
     if args.texture:
-        image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0]*args.canvas_size, im_size[1]*args.canvas_size), dtype=torch.float)
+        image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0]*args.canvas_size, im_size[1]*args.canvas_size), dtype=torch.float).to(args.device)
         image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
+        image_syn = image_syn.to(args.device)
     else:
-        image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0], im_size[1]), dtype=torch.float)
+        image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0], im_size[1]), dtype=torch.float).to(args.device)
         image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
+        image_syn = image_syn.to(args.device)
 
     syn_lr = torch.tensor(args.lr_teacher).to(args.device)
 
@@ -144,7 +147,8 @@ def main(args):
         print('initialize synthetic data from random real images')
         for c in range(num_classes):
             image_syn.data[c * args.ipc:(c + 1) * args.ipc] = get_images(c, args.ipc).detach().data
-            image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
+            image_syn = image_syn.to(args.device)
+            image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1)).to(args.device)
     else:
         print('initialize synthetic data from random noise')
 
