@@ -211,6 +211,7 @@ def get_network(model, channel, num_classes, im_size=(32, 32), dist=True):
         if gpu_num>0:
             device = 'cuda'
             if gpu_num>1:
+                print(f"Using {gpu_num} devices for training.")
                 net = nn.DataParallel(net)
         else:
             device = 'cpu'
