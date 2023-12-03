@@ -127,7 +127,8 @@ def main(args):
 
 
     ''' initialize the synthetic data '''
-    label_syn = torch.tensor([np.ones(args.ipc)*i for i in range(num_classes)], dtype=torch.long, requires_grad=False, device=args.device).view(-1) # [0,0,0, 1,1,1, ..., 9,9,9]
+    # label_syn = torch.tensor([np.ones(args.ipc)*i for i in range(num_classes)], dtype=torch.long, requires_grad=False, device=args.device).view(-1) # [0,0,0, 1,1,1, ..., 9,9,9]
+    label_syn = torch.tensor(np.array([np.ones(args.ipc)*i for i in range(num_classes)]), dtype=torch.long, requires_grad=False, device=args.device).view(-1)
 
     if args.texture:
         image_syn = torch.randn(size=(num_classes * args.ipc, channel, im_size[0]*args.canvas_size, im_size[1]*args.canvas_size), dtype=torch.float).to(args.device)
@@ -155,7 +156,7 @@ def main(args):
 
     ''' training '''
     image_syn = image_syn.detach().to(args.device).requires_grad_(True)
-    image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1))
+    image_syn = renormalize_imagenet(torch.clamp(unnormalize_imagenet(image_syn), 0, 1)).detach().requires_grad_(True)
     print(image_syn.shape)
     syn_lr = syn_lr.detach().to(args.device).requires_grad_(True)
 
