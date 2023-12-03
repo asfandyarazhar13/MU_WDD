@@ -208,6 +208,7 @@ def get_network(model, channel, num_classes, im_size=(32, 32), dist=True):
 
     if dist:
         gpu_num = torch.cuda.device_count()
+        print("Num of devices found:", gpu_num)
         if gpu_num>0:
             device = 'cuda'
             if gpu_num>1:
