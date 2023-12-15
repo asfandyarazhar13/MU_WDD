@@ -28,7 +28,7 @@ python distill.py --dataset=CIFAR10 --ipc=1 --syn_steps=50 --expert_epochs=2 --m
 ```
 
 ### Step 3: Unlearning with Fine-tuning and Gradient Ascent
-Run the following commands from `unlearn` for your method of choice (`-- unlearn FT` for fine-tuning or `-- unlearn GA` for gradient ascent)
+Run the following commands from `unlearn` for your method of choice (`--unlearn FT` for fine-tuning or `--unlearn GA` for gradient ascent)
 
 ```shell
 python main_forget_distill.py --mask resnet18_cifar10.pth --unlearn FT --unlearn_lr 0.01 --unlearn_epochs 10 --class_to_replace <CLASS> --dataset cifar10
