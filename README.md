@@ -24,7 +24,7 @@ Run the following commands from `tesla` to get the expert trajectories (first co
 python buffer.py --dataset=CIFAR10 --model=ConvNetD3 --train_epochs=50 --num_experts=100 --zca
 ```
 ```shell
-python distill.py --dataset=CIFAR10 --ipc=1 --syn_steps=50 --expert_epochs=2 --max_start_epoch=45 --lr_img=1000 --lr_lr=1e-07 --lr_teacher=0.01 --lr_weights=0.01 --data_path data --zca --model=ConvNetD3
+python distill.py --dataset=CIFAR10 --ipc=1 --syn_steps=50 --expert_epochs=2 --max_start_epoch=45 --lr_img=1000 --lr_lr=1e-07 --lr_teacher=0.01 --lr_weights=0.01 --data_path <PATH> --zca --model=ConvNetD3
 ```
 
 ### Step 3: Unlearning with Fine-tuning and Gradient Ascent
