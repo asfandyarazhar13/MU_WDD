@@ -12,7 +12,7 @@ The experiments involve an ablation study on unweighted and weighted data distil
 
 ![WDD Output](wdd_output.png)
 
-## Get Started with an Example: Commands that take you through the MU-WDD Pipeline
+## Get Started with an Example: Commands to take you through the MU-WDD Pipeline
 
 ### Step 1: Download Pretrained Model 
 Download a pretrained ResNet18 model on CIFAR10 from HuggingFace [here](https://huggingface.co/edadaltocg/resnet18_cifar10). 
