@@ -1,10 +1,6 @@
-# Datasets
+# Example Distilled Dataset
 
-Each `.zip` file contains distilled tensor images (with their corresponding labels) of popular machine learning benchmark datasets. 
-
-Namely:
-* CIFAR-10
-* CIFAR-100
+Each `.zip` file contains distilled tensor images (with their corresponding labels) of a popular machine learning benchmark dataset, namely `CIFAR10`.
 
 When the files are unzipped directories will have the following naming conventions: 
 
