@@ -1,6 +1,6 @@
 # Machine Unlearning with Weighted Data Distillation
 
-The following codebase supplements the paper [*"Machine Unlearning with Weighted Data Distillation"*](ADD LINK HERE).
+The following codebase supplements the paper [*"Machine Unlearning with Weighted Data Distillation"*](https://www.overleaf.com/read/mwtdcjkzbqcy#7066cf).
 
 ![MU with WDD Pipeline](pipeline.png)
 
